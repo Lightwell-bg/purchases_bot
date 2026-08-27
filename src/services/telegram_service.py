@@ -79,6 +79,10 @@ async def publish_purchase(bot: Bot, session: AsyncSession, purchase: Purchase) 
         logger.error("MAIN_GROUP_ID is not configured, cannot publish purchase %s", purchase.id)
         return False
 
+    # Статус выставляем ДО сборки текста и клавиатуры: announcement_keyboard()
+    # добавляет кнопку «Присоединиться» только для OPEN, иначе на первой
+    # публикации она не появляется вообще ни у кого.
+    purchase.status = PurchaseStatus.OPEN
     text = ru.group_announcement(purchase, purchase_service.totals(purchase), settings.tz)
     keyboard = announcement_keyboard(purchase)
 
@@ -98,12 +102,14 @@ async def publish_purchase(bot: Bot, session: AsyncSession, purchase: Purchase) 
                 disable_web_page_preview=True,
             )
     except (TelegramBadRequest, TelegramForbiddenError) as exc:
+        # Откатываем статус: без объявления в группе закупка не должна
+        # выглядеть открытой.
+        purchase.status = PurchaseStatus.DRAFT
         logger.error("Failed to publish purchase %s: %s", purchase.id, exc)
         return False
 
     purchase.group_chat_id = message.chat.id
     purchase.group_message_id = message.message_id
-    purchase.status = PurchaseStatus.OPEN
     await session.flush()
 
     logger.info(
