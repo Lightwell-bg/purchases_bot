@@ -216,6 +216,14 @@ def _price_line(unit_price: Decimal, currency: str) -> str:
     return f"💶 Цена: {fmt_money(unit_price, currency)} / шт."
 
 
+def _city_upper(location: str | None) -> str:
+    """Город заглавными буквами — так его проще выхватить взглядом, когда
+    сканируешь список из нескольких закупок в разных городах."""
+    if not location:
+        return ""
+    return esc(truncate(location, LIMITS["pickup"]).upper())
+
+
 def purchase_preview(data: Mapping[str, Any], tz: ZoneInfo) -> str:
     """Предпросмотр перед публикацией. `data` — черновик из FSM."""
     lines = [
@@ -312,8 +320,15 @@ def group_announcement(purchase: Purchase, totals: PurchaseTotals, tz: ZoneInfo)
 
 
 def purchase_short_card(purchase: Purchase, totals: PurchaseTotals, tz: ZoneInfo) -> str:
-    """Краткая карточка, которую видит пришедший по ссылке пользователь."""
-    lines = [
+    """Краткая карточка, которую видит пришедший по ссылке пользователь.
+
+    Город — первой строкой заглавными буквами: при просмотре нескольких
+    закупок подряд это самое важное для быстрого решения «моё / не моё».
+    """
+    lines = []
+    if purchase.pickup_location:
+        lines += [f"📍 <b>{_city_upper(purchase.pickup_location)}</b>", ""]
+    lines += [
         f"🛒 <b>Совместная покупка #{purchase.id}</b>",
         "",
         f"<b>{esc(truncate(purchase.title, LIMITS['title']))}</b>",
@@ -328,8 +343,6 @@ def purchase_short_card(purchase: Purchase, totals: PurchaseTotals, tz: ZoneInfo
         f"из {fmt_money(totals.limit, purchase.currency)})",
         f"⏰ Сбор до: {fmt_datetime(purchase.deadline, tz)}",
     ]
-    if purchase.pickup_location:
-        lines.append(f"📍 Получение: {esc(truncate(purchase.pickup_location, LIMITS['pickup']))}")
     lines.append(f"👤 Организатор: {esc(purchase.organizer.display_name)}")
     if purchase.variant_description:
         lines += [
@@ -469,9 +482,10 @@ def active_purchases_page(
 ) -> str:
     lines = [f"📋 <b>Активные закупки</b> ({total})"]
     for purchase, totals in purchases:
+        city = _city_upper(purchase.pickup_location)
+        lines += ["", f"📍 <b>{city}</b>"] if city else [""]
         lines += [
-            "",
-            f"<b>#{purchase.id} · {esc(truncate(purchase.title, 60))}</b>",
+            f"#{purchase.id} · {esc(truncate(purchase.title, 60))}",
             f"{fmt_money(purchase.unit_price, purchase.currency)} / шт. · "
             f"{totals.total_quantity} шт. · до {fmt_datetime(purchase.deadline, tz, False)}",
         ]
