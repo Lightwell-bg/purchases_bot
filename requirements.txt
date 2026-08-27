@@ -1,0 +1,13 @@
+# Версии зафиксированы по нижней границе: под Python 3.12 (Docker)
+# и под Python 3.14 (локально) ставятся разные сборки одних и тех же пакетов.
+aiogram>=3.22,<4.0
+SQLAlchemy>=2.0.43,<2.1
+aiosqlite>=0.21
+alembic>=1.16,<2.0
+pydantic-settings>=2.10,<3.0
+python-dotenv>=1.1
+tzdata>=2025.2
+
+# tests
+pytest>=8.4
+pytest-asyncio>=1.1

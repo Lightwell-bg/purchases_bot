@@ -1,0 +1,18 @@
+services:
+  bot:
+    build: .
+    container_name: purchases_bot
+    restart: unless-stopped
+    env_file:
+      - .env
+    volumes:
+      # База и логи живут на хосте — переживают пересборку образа.
+      - ./data:/app/data
+      - ./logs:/app/logs
+      # Бизнес-настройки можно править без пересборки.
+      - ./settings.ini:/app/settings.ini:ro
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
