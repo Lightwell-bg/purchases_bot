@@ -12,7 +12,14 @@ from aiogram.filters.callback_data import CallbackData
 class MenuCB(CallbackData, prefix="m"):
     """Главное меню личного чата."""
 
-    action: str  # main | create | my | rules
+    action: str  # main | create | my | active | rules
+
+
+class ListCB(CallbackData, prefix="l"):
+    """Постраничный список активных закупок."""
+
+    action: str  # page
+    page: int
 
 
 class RulesCB(CallbackData, prefix="r"):

@@ -8,7 +8,7 @@ from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 
 from src.database.models import Participant, Purchase, PurchaseStatus
-from src.keyboards.callbacks import JoinCB, ManageCB, MenuCB, PartCB, RulesCB, WizardCB
+from src.keyboards.callbacks import JoinCB, ListCB, ManageCB, MenuCB, PartCB, RulesCB, WizardCB
 from src.utils.formatting import truncate
 
 BTN_CANCEL = "❌ Отмена"
@@ -41,6 +41,7 @@ CURRENCIES = ("EUR", "USD", "BGN")
 def main_menu() -> InlineKeyboardMarkup:
     builder = InlineKeyboardBuilder()
     builder.button(text="🛒 Создать закупку", callback_data=MenuCB(action="create"))
+    builder.button(text="📋 Активные закупки", callback_data=MenuCB(action="active"))
     builder.button(text="📦 Мои покупки", callback_data=MenuCB(action="my"))
     builder.button(text="📜 Правила", callback_data=MenuCB(action="rules"))
     builder.adjust(1)
@@ -382,3 +383,47 @@ def confirm_cancel(purchase_id: int) -> InlineKeyboardMarkup:
 
 def url_button(text: str, url: str) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text=text, url=url)]])
+
+
+# --------------------------------------------------------------------------- #
+# Список активных закупок
+# --------------------------------------------------------------------------- #
+
+def active_purchases(
+    purchases: Sequence[Purchase],
+    page: int,
+    total_pages: int,
+    bot_username: str,
+) -> InlineKeyboardMarkup:
+    """Каждая закупка — отдельная строка со своей ссылкой на присоединение."""
+    rows: list[list[InlineKeyboardButton]] = []
+    for purchase in purchases:
+        rows.append(
+            [
+                InlineKeyboardButton(
+                    text=f"Открыть #{purchase.id}",
+                    url=f"https://t.me/{bot_username}?start=join_{purchase.public_token}",
+                )
+            ]
+        )
+
+    nav_row: list[InlineKeyboardButton] = []
+    if page > 0:
+        nav_row.append(
+            InlineKeyboardButton(
+                text="◀️ Назад", callback_data=ListCB(action="page", page=page - 1).pack()
+            )
+        )
+    if page + 1 < total_pages:
+        nav_row.append(
+            InlineKeyboardButton(
+                text="▶️ Далее", callback_data=ListCB(action="page", page=page + 1).pack()
+            )
+        )
+    if nav_row:
+        rows.append(nav_row)
+
+    rows.append(
+        [InlineKeyboardButton(text=BTN_BACK_TO_MENU, callback_data=MenuCB(action="main").pack())]
+    )
+    return InlineKeyboardMarkup(inline_keyboard=rows)

@@ -27,6 +27,7 @@ logger = logging.getLogger(__name__)
 PRIVATE_COMMANDS = [
     BotCommand(command="start", description="Главное меню"),
     BotCommand(command="buy", description="Создать совместную покупку"),
+    BotCommand(command="active", description="Активные закупки"),
     BotCommand(command="my", description="Мои покупки"),
     BotCommand(command="cancel", description="Прервать текущий диалог"),
 ]
@@ -34,6 +35,7 @@ PRIVATE_COMMANDS = [
 GROUP_COMMANDS = [
     BotCommand(command="help", description="Как работают совместные покупки"),
     BotCommand(command="buy", description="Создать совместную покупку"),
+    BotCommand(command="active", description="Активные закупки"),
 ]
 
 

@@ -96,6 +96,10 @@ GROUP_BOT_ADDED = (
     "сообщение для закрепления."
 )
 
+GROUP_KEYBOARD_ARMED = (
+    "🔘 Кнопка «📋 Активные закупки» теперь всегда под рукой, рядом с полем ввода."
+)
+
 GROUP_REDIRECT = (
     "Создание закупки проходит в личном чате с ботом.\n"
     "Нажмите кнопку ниже, чтобы открыть личку."
@@ -443,6 +447,36 @@ def join_unavailable(reason: str) -> str:
         "EXPIRED": "⏰ Срок сбора истёк — присоединиться нельзя.",
         "NOT_PUBLISHED": "Эта закупка ещё не опубликована.",
     }.get(reason, "Присоединиться к этой закупке нельзя.")
+
+
+# --------------------------------------------------------------------------- #
+# Список активных закупок
+# --------------------------------------------------------------------------- #
+
+ACTIVE_PURCHASES_EMPTY = (
+    "📋 <b>Активные закупки</b>\n\n"
+    "Сейчас открытых закупок нет. Будьте первым — создайте свою!"
+)
+
+
+def active_purchases_page(
+    purchases: Sequence[tuple[Purchase, PurchaseTotals]],
+    page: int,
+    total_pages: int,
+    total: int,
+    tz: ZoneInfo,
+) -> str:
+    lines = [f"📋 <b>Активные закупки</b> ({total})"]
+    for purchase, totals in purchases:
+        lines += [
+            "",
+            f"<b>#{purchase.id} · {esc(truncate(purchase.title, 60))}</b>",
+            f"{fmt_money(purchase.unit_price, purchase.currency)} / шт. · "
+            f"{totals.total_quantity} шт. · до {fmt_datetime(purchase.deadline, tz, False)}",
+        ]
+    if total_pages > 1:
+        lines += ["", f"Страница {page + 1} из {total_pages}"]
+    return fit_html("\n".join(lines), MAX_MESSAGE_LENGTH)
 
 
 # --------------------------------------------------------------------------- #

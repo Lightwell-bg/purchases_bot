@@ -88,6 +88,17 @@ class PurchaseRepository:
         )
         return list(result.scalars().all())
 
+    async def list_open(self, limit: int, offset: int) -> list[Purchase]:
+        """Страница открытых закупок для общего списка «Активные закупки»."""
+        result = await self.session.execute(
+            select(Purchase)
+            .where(Purchase.status == PurchaseStatus.OPEN)
+            .order_by(Purchase.created_at.desc())
+            .limit(limit)
+            .offset(offset)
+        )
+        return list(result.scalars().all())
+
     async def count_by_status(self, status: PurchaseStatus) -> int:
         result = await self.session.execute(
             select(func.count()).select_from(Purchase).where(Purchase.status == status)

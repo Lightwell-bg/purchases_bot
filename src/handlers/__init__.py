@@ -9,6 +9,7 @@ from __future__ import annotations
 from aiogram import Dispatcher
 
 from src.handlers import (
+    active_purchases,
     admin,
     create_purchase,
     errors,
@@ -28,6 +29,7 @@ def register_routers(dp: Dispatcher) -> None:
     dp.include_router(start.router)
     dp.include_router(group.router)
     dp.include_router(admin.router)
+    dp.include_router(active_purchases.router)
     dp.include_router(my_purchases.router)
     dp.include_router(rules.router)
     dp.include_router(create_purchase.router)
