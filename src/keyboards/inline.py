@@ -149,11 +149,23 @@ def group_open_bot(deep_link: str) -> InlineKeyboardMarkup:
     return builder.as_markup()
 
 
-def announcement(join_link: str, rules_link: str, joinable: bool) -> InlineKeyboardMarkup:
-    """Клавиатура под объявлением в группе."""
+def announcement(
+    join_link: str,
+    rules_link: str,
+    joinable: bool,
+    create_link: str | None = None,
+) -> InlineKeyboardMarkup:
+    """Клавиатура под объявлением в группе.
+
+    Кнопка создания своей закупки повторяется на каждом объявлении: человек,
+    листающий чужие закупки, не должен искать закреплённое сообщение или
+    вспоминать команду — выход к созданию должен быть там же, где он смотрит.
+    """
     builder = InlineKeyboardBuilder()
     if joinable:
         builder.button(text="🛒 Присоединиться", url=join_link)
+    if create_link:
+        builder.button(text="➕ Создать свою закупку", url=create_link)
     builder.button(text="📜 Правила", url=rules_link)
     builder.adjust(1)
     return builder.as_markup()

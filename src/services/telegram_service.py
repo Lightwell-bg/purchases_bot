@@ -69,6 +69,8 @@ def announcement_keyboard(purchase: Purchase) -> InlineKeyboardMarkup:
         join_link=settings.deep_link(f"join_{purchase.public_token}"),
         rules_link=settings.deep_link("rules"),
         joinable=joinable,
+        # Кнопка на каждом объявлении: не нужно искать закреп или помнить /buy.
+        create_link=settings.deep_link("create") if settings.bot_username else None,
     )
 
 
