@@ -10,9 +10,11 @@ persistent_keyboard). Последнее технически возможно �
 ничего, кроме этого одного точного совпадения.
 
 Служебная переписка (команды и ответы на них) удаляется через
-GROUP_CLEANUP_SECONDS, чтобы не засорять ленту группы. В группе постоянно
-живёт только закреплённое приглашение, объявления о закупках и сама
-reply-клавиатура (она не «сообщение», а состояние поля ввода).
+GROUP_CLEANUP_SECONDS, чтобы не засорять ленту группы. Исключение —
+сообщение, которое устанавливает постоянную reply-клавиатуру: его нельзя
+удалять, иначе Telegram убирает клавиатуру у всех участников вместе с ним.
+В группе постоянно живут: закреплённое приглашение, объявления о закупках
+и это сообщение.
 """
 
 from __future__ import annotations
@@ -51,11 +53,20 @@ async def _reply_and_cleanup(
     text: str,
     keyboard=None,
     lifetime_factor: int = 1,
+    keep_reply: bool = False,
 ) -> None:
-    """Отвечает в группе и планирует уборку своего ответа вместе с командой."""
+    """Отвечает в группе и планирует уборку.
+
+    `keep_reply=True` — не удалять собственный ответ бота. Нужен там, где
+    ответ несёт постоянную reply-клавиатуру: на практике удаление такого
+    сообщения сбрасывает клавиатуру у всех участников группы, а не только
+    убирает текст (проверено на реальном развёртывании — без этого флага
+    кнопка исчезала вместе с сообщением через group_cleanup_seconds).
+    """
     sent = await message.answer(text, reply_markup=keyboard)
     delay = get_settings().business.group_cleanup_seconds * lifetime_factor
-    delete_later(bot, message.chat.id, [message.message_id, sent.message_id], delay)
+    ids = [message.message_id] if keep_reply else [message.message_id, sent.message_id]
+    delete_later(bot, message.chat.id, ids, delay)
 
 
 def persistent_keyboard() -> ReplyKeyboardMarkup:
@@ -64,8 +75,9 @@ def persistent_keyboard() -> ReplyKeyboardMarkup:
     В отличие от inline-кнопок под конкретным сообщением, reply-клавиатура
     остаётся видна всем участникам группы независимо от того, какое
     сообщение они сейчас смотрят — ровно то, что нужно для «всегда под
-    рукой». Держится, пока не будет заменена новой клавиатурой; удаление
-    сообщения, которым она установлена, на неё не влияет.
+    рукой». Держится, пока не будет заменена новой клавиатурой — но именно
+    сообщение, которым она установлена, удалять нельзя (см. keep_reply
+    у _reply_and_cleanup).
     """
     return ReplyKeyboardMarkup(
         keyboard=[[KeyboardButton(text=ACTIVE_BUTTON_TEXT)]],
@@ -78,12 +90,10 @@ async def _arm_persistent_keyboard(message: Message, bot: Bot) -> None:
     """Устанавливает reply-клавиатуру отдельным сообщением.
 
     Нужно отдельное сообщение там, где основное уже занято inline-кнопками
-    (у сообщения может быть только один тип reply_markup).
+    (у сообщения может быть только один тип reply_markup). Само это
+    сообщение НЕ удаляется — иначе клавиатура пропадёт вместе с ним.
     """
-    sent = await message.answer(ru.GROUP_KEYBOARD_ARMED, reply_markup=persistent_keyboard())
-    delete_later(
-        bot, message.chat.id, [sent.message_id], get_settings().business.group_cleanup_seconds
-    )
+    await message.answer(ru.GROUP_KEYBOARD_ARMED, reply_markup=persistent_keyboard())
 
 
 @router.message(Command("buy"))
@@ -130,6 +140,7 @@ async def on_new_members(message: Message, bot: Bot) -> None:
             ru.GROUP_BOT_ADDED,
             persistent_keyboard(),
             lifetime_factor=WELCOME_LIFETIME_FACTOR,
+            keep_reply=True,
         )
         return
 
