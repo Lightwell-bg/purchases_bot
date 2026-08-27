@@ -8,7 +8,7 @@ import logging
 from aiogram import Bot, Dispatcher
 from aiogram.exceptions import TelegramNetworkError, TelegramUnauthorizedError
 
-from src.bot import create_bot, create_dispatcher
+from src.bot import create_bot, create_dispatcher, setup_bot_commands
 from src.config import BASE_DIR, get_settings
 from src.database.db import dispose_engine
 from src.logging_setup import setup_logging
@@ -43,6 +43,8 @@ async def on_startup(bot: Bot) -> asyncio.Task:
         logger.warning("BOT_USERNAME не задан — deep links работать не будут")
     if not settings.main_group_id:
         logger.warning("MAIN_GROUP_ID не задан — публикация в группу недоступна")
+
+    await setup_bot_commands(bot)
 
     closed = await close_expired_purchases(bot)
     if closed:

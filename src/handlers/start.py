@@ -69,6 +69,11 @@ async def cmd_menu(message: Message, state: FSMContext) -> None:
     await show_main_menu(message, state)
 
 
+@router.message(Command("help"))
+async def cmd_help(message: Message) -> None:
+    await message.answer(ru.GROUP_HELP, reply_markup=inline.main_menu())
+
+
 @router.message(Command("cancel"))
 async def cmd_cancel(message: Message, state: FSMContext) -> None:
     await state.clear()

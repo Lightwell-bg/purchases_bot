@@ -19,6 +19,7 @@ from src.utils.formatting import (
     link,
     plural_ru,
     truncate,
+    visible_length,
 )
 
 TZ = ZoneInfo("Europe/Sofia")
@@ -63,9 +64,33 @@ class TestTruncate:
         assert truncate(None, 10) == ""
 
 
+class TestVisibleLength:
+    def test_tags_do_not_count(self):
+        assert visible_length("<b>abc</b>") == 3
+
+    def test_entities_count_as_one_char(self):
+        assert visible_length("&lt;x&gt;") == 3
+
+    def test_long_href_does_not_count(self):
+        """Telegram считает длину текста, а не адреса ссылки."""
+        url = "https://shop.example.com/item?" + "x" * 1800
+        assert visible_length(f'<a href="{url}">Ссылка на товар</a>') == 15
+
+
 class TestFitHtml:
     def test_short_text_untouched(self):
         assert fit_html("line1\nline2", 100) == "line1\nline2"
+
+    def test_long_url_does_not_eat_the_budget(self):
+        """Объявление с длинной ссылкой на товар не должно обрезаться."""
+        url = "https://www.temu.com/bg/" + "%D0%BE" * 300 + ".html?share_token=" + "a" * 200
+        text = (
+            "🛒 <b>Совместная покупка #1</b>\n\n"
+            f'🔗 <a href="{url}">Ссылка на товар</a>\n\n'
+            "📦 Собрано: 6 шт."
+        )
+        assert len(text) > MAX_CAPTION_LENGTH
+        assert fit_html(text, MAX_CAPTION_LENGTH) == text
 
     def test_long_text_is_cut_by_lines(self):
         text = "\n".join(f"line {i}" for i in range(500))

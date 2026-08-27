@@ -101,7 +101,8 @@ class Purchase(Base, TimestampMixin):
     )
 
     title: Mapped[str] = mapped_column(String(200), nullable=False)
-    product_url: Mapped[str | None] = mapped_column(String(1000))
+    # Реальные ссылки маркетплейсов с трекинг-параметрами бывают под 2000 символов.
+    product_url: Mapped[str | None] = mapped_column(Text)
     description: Mapped[str | None] = mapped_column(Text)
     variant_description: Mapped[str | None] = mapped_column(String(500))
 

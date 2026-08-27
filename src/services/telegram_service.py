@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from typing import Sequence
 
 from aiogram import Bot
 from aiogram.exceptions import (
@@ -32,6 +33,33 @@ BROADCAST_DELAY = 0.05
 
 NOT_MODIFIED = "message is not modified"
 MESSAGE_GONE = ("message to edit not found", "message can't be edited", "MESSAGE_ID_INVALID")
+
+
+_cleanup_tasks: set[asyncio.Task] = set()
+
+
+def delete_later(bot: Bot, chat_id: int, message_ids: Sequence[int], delay: int) -> None:
+    """Убирает служебную переписку из группы через `delay` секунд.
+
+    Нужны права «Удаление сообщений»; если их нет — просто ничего не происходит,
+    ошибку глушим. Ссылку на задачу держим в модульном множестве, иначе
+    сборщик мусора может убить её до срабатывания.
+    """
+    ids = [mid for mid in message_ids if mid]
+    if delay <= 0 or not ids:
+        return
+
+    async def _run() -> None:
+        await asyncio.sleep(delay)
+        for message_id in ids:
+            try:
+                await bot.delete_message(chat_id, message_id)
+            except (TelegramBadRequest, TelegramForbiddenError) as exc:
+                logger.debug("Cannot delete message %s in %s: %s", message_id, chat_id, exc)
+
+    task = asyncio.create_task(_run())
+    _cleanup_tasks.add(task)
+    task.add_done_callback(_cleanup_tasks.discard)
 
 
 def announcement_keyboard(purchase: Purchase) -> InlineKeyboardMarkup:

@@ -62,6 +62,16 @@ class TestUrl:
     def test_valid(self):
         assert parse_url("https://example.com/item?id=1") == "https://example.com/item?id=1"
 
+    def test_real_marketplace_link_with_tracking_params(self):
+        """Ссылки Temu/AliExpress с трекингом бывают под 2000 символов."""
+        url = "https://www.temu.com/bg/goods-g-601099651743804.html?" + "&_x_ns=" * 200
+        assert 1000 < len(url) <= 2048
+        assert parse_url(url) == url
+
+    def test_url_above_hard_limit_rejected(self):
+        with pytest.raises(ValueError):
+            parse_url("https://example.com/?" + "a" * 2100)
+
     @pytest.mark.parametrize("raw", ["example.com", "ftp://example.com", ""])
     def test_invalid(self, raw):
         with pytest.raises(ValueError):

@@ -12,6 +12,8 @@ from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 from zoneinfo import ZoneInfo
 
 MAX_PRICE = Decimal("100000")
+# Telegram принимает длинные URL в text_link; ограничение с запасом.
+MAX_URL_LENGTH = 2048
 URL_RE = re.compile(r"^https?://\S+$", re.IGNORECASE)
 
 # (формат, есть ли в нём время)
@@ -65,8 +67,11 @@ def parse_url(raw: str) -> str:
         value = value.split()[0]
     if not URL_RE.match(value):
         raise ValueError("Нужна ссылка, начинающаяся с http:// или https://")
-    if len(value) > 1000:
-        raise ValueError("Ссылка слишком длинная.")
+    if len(value) > MAX_URL_LENGTH:
+        raise ValueError(
+            f"Ссылка слишком длинная ({len(value)} символов, максимум {MAX_URL_LENGTH}). "
+            "Обычно помогает убрать всё после знака ? — товар откроется и так."
+        )
     return value
 
 

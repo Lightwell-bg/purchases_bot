@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import html
+import re
 from datetime import datetime
 from decimal import Decimal
 from zoneinfo import ZoneInfo
@@ -10,6 +11,8 @@ from zoneinfo import ZoneInfo
 # Лимиты Telegram Bot API.
 MAX_MESSAGE_LENGTH = 4096
 MAX_CAPTION_LENGTH = 1024
+
+TAG_RE = re.compile(r"<[^>]+>")
 
 CURRENCY_SYMBOLS = {
     "EUR": "€",
@@ -60,22 +63,33 @@ def truncate(value: str | None, limit: int) -> str:
     return value[: limit - 1].rstrip() + "…"
 
 
+def visible_length(text: str) -> int:
+    """Длина сообщения так, как её считает Telegram.
+
+    Разметка и адреса ссылок в лимит не входят: Telegram парсит HTML и хранит
+    их отдельными entity. Без этого одна длинная ссылка на товар съедала бы
+    почти весь бюджет объявления.
+    """
+    return len(html.unescape(TAG_RE.sub("", text)))
+
+
 def fit_html(text: str, limit: int) -> str:
     """Страховка от превышения лимита длины сообщения.
 
     Режем по границе строки, чтобы не разорвать HTML-тег: все теги в наших
     сообщениях закрываются внутри одной строки.
     """
-    if len(text) <= limit:
+    if visible_length(text) <= limit:
         return text
     lines = text.split("\n")
     result: list[str] = []
     total = 0
     for line in lines:
-        if total + len(line) + 1 > limit - 2:
+        line_length = visible_length(line) + 1
+        if total + line_length > limit - 2:
             break
         result.append(line)
-        total += len(line) + 1
+        total += line_length
     return "\n".join(result).rstrip() + "\n…"
 
 

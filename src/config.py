@@ -29,11 +29,13 @@ class BusinessSettings:
         purchase_limit_eur: Decimal,
         max_items_per_participant: int,
         max_deadline_days: int,
+        group_cleanup_seconds: int,
     ) -> None:
         self.customs_flat_fee_eur = customs_flat_fee_eur
         self.purchase_limit_eur = purchase_limit_eur
         self.max_items_per_participant = max_items_per_participant
         self.max_deadline_days = max_deadline_days
+        self.group_cleanup_seconds = group_cleanup_seconds
 
     @classmethod
     def from_file(cls, path: Path) -> "BusinessSettings":
@@ -46,11 +48,13 @@ class BusinessSettings:
         parser.read(path, encoding="utf-8")
         business = parser["business"]
         limits = parser["limits"] if parser.has_section("limits") else {}
+        group = parser["group"] if parser.has_section("group") else {}
         return cls(
             customs_flat_fee_eur=Decimal(business["customs_flat_fee_eur"].strip()),
             purchase_limit_eur=Decimal(business["purchase_limit_eur"].strip()),
             max_items_per_participant=int(limits.get("max_items_per_participant", 100)),
             max_deadline_days=int(limits.get("max_deadline_days", 365)),
+            group_cleanup_seconds=int(group.get("group_cleanup_seconds", 90)),
         )
 
 
@@ -91,7 +95,11 @@ class Settings(BaseSettings):
             return [int(part) for part in value.replace(";", ",").split(",") if part.strip()]
         return value
 
-    @field_validator("main_group_id", "deadline_check_interval_seconds", mode="before")
+    @field_validator(
+        "main_group_id",
+        "deadline_check_interval_seconds",
+        mode="before",
+    )
     @classmethod
     def _empty_to_default(cls, value: object) -> object:
         """Пустая строка в .env — это «не задано», а не ошибка."""
