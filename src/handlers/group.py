@@ -44,6 +44,7 @@ WELCOME_LIFETIME_FACTOR = 10
 
 # Reply-клавиатура (не inline!): Telegram показывает её всем участникам
 # группы рядом с полем ввода, независимо от того, какое сообщение они видят.
+CREATE_BUTTON_TEXT = "➕ Создать свою закупку"
 ACTIVE_BUTTON_TEXT = "📋 Активные закупки"
 
 
@@ -70,7 +71,7 @@ async def _reply_and_cleanup(
 
 
 def persistent_keyboard() -> ReplyKeyboardMarkup:
-    """Кнопка быстрого доступа к списку закупок у поля ввода.
+    """Кнопки быстрого доступа у поля ввода: создать закупку, список активных.
 
     В отличие от inline-кнопок под конкретным сообщением, reply-клавиатура
     остаётся видна всем участникам группы независимо от того, какое
@@ -80,7 +81,7 @@ def persistent_keyboard() -> ReplyKeyboardMarkup:
     у _reply_and_cleanup).
     """
     return ReplyKeyboardMarkup(
-        keyboard=[[KeyboardButton(text=ACTIVE_BUTTON_TEXT)]],
+        keyboard=[[KeyboardButton(text=CREATE_BUTTON_TEXT), KeyboardButton(text=ACTIVE_BUTTON_TEXT)]],
         resize_keyboard=True,
         is_persistent=True,
     )
@@ -203,6 +204,12 @@ async def group_active_button(message: Message, bot: Bot, session: AsyncSession)
     и удаления объявлений.
     """
     await _show_active_purchases(message, bot, session)
+
+
+@router.message(F.text == CREATE_BUTTON_TEXT)
+async def group_create_button(message: Message, bot: Bot) -> None:
+    """Та же reply-кнопка, тот же путь, что и у команды /buy."""
+    await cmd_buy(message, bot)
 
 
 @router.message(Command("chatid"))
