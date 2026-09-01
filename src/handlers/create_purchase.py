@@ -313,8 +313,8 @@ async def wizard_skip(callback: CallbackQuery, state: FSMContext) -> None:
 
 
 @router.callback_query(WizardCB.filter(F.action == "cancel"))
-async def wizard_cancel(callback: CallbackQuery, state: FSMContext) -> None:
-    await show_main_menu(callback, state)
+async def wizard_cancel(callback: CallbackQuery, state: FSMContext, user: User) -> None:
+    await show_main_menu(callback, state, user)
     await callback.answer(ru.CANCELLED)
 
 
@@ -359,7 +359,7 @@ async def wizard_publish(
     data = await state.get_data()
     if "title" not in data or "unit_price" not in data or "deadline" not in data:
         await callback.answer(ru.OUTDATED_CALLBACK, show_alert=True)
-        await show_main_menu(callback, state)
+        await show_main_menu(callback, state, user)
         return
 
     if not settings.main_group_id:

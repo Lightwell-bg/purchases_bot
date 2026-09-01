@@ -79,14 +79,25 @@ class PurchaseRepository:
         )
         return list(result.scalars().all())
 
-    async def list_recent(self, limit: int = 10) -> list[Purchase]:
+    async def list_all(self, limit: int, offset: int) -> list[Purchase]:
+        """Страница всех закупок кроме черновиков — для админ-обзора."""
         result = await self.session.execute(
             select(Purchase)
             .where(Purchase.status != PurchaseStatus.DRAFT)
-            .order_by(Purchase.id.desc())
+            .order_by(Purchase.created_at.desc())
             .limit(limit)
+            .offset(offset)
         )
         return list(result.scalars().all())
+
+    async def count_all(self) -> int:
+        """Всего закупок кроме черновиков — для пагинации админ-обзора."""
+        result = await self.session.execute(
+            select(func.count())
+            .select_from(Purchase)
+            .where(Purchase.status != PurchaseStatus.DRAFT)
+        )
+        return int(result.scalar_one())
 
     async def list_open(self, limit: int, offset: int) -> list[Purchase]:
         """Страница открытых закупок для общего списка «Активные закупки»."""
@@ -104,3 +115,14 @@ class PurchaseRepository:
             select(func.count()).select_from(Purchase).where(Purchase.status == status)
         )
         return int(result.scalar_one())
+
+    async def count_by_status_all(self) -> dict[PurchaseStatus, int]:
+        """Счётчики по каждому статусу одним запросом — для /stats.
+
+        Разреженный словарь: статус без единой закупки в нём просто
+        отсутствует, дозаполнение нулями — на стороне текстовой функции.
+        """
+        result = await self.session.execute(
+            select(Purchase.status, func.count()).select_from(Purchase).group_by(Purchase.status)
+        )
+        return dict(result.all())

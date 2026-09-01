@@ -12,7 +12,7 @@ from aiogram.filters.callback_data import CallbackData
 class MenuCB(CallbackData, prefix="m"):
     """Главное меню личного чата."""
 
-    action: str  # main | create | my | active | rules
+    action: str  # main | create | my | active | rules | stats | purchases
 
 
 class ListCB(CallbackData, prefix="l"):
@@ -59,3 +59,10 @@ class ManageCB(CallbackData, prefix="g"):
     action: str  # panel | participants | edit | edit_field | close | close_yes | cancel | cancel_yes
     purchase_id: int
     value: str = ""
+
+
+class AdminCB(CallbackData, prefix="a"):
+    """Постраничный список всех закупок для админа."""
+
+    action: str  # purchases
+    page: int = 0

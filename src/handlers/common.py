@@ -8,6 +8,8 @@ from aiogram.exceptions import TelegramBadRequest
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, InlineKeyboardMarkup, Message
 
+from src.config import get_settings
+from src.database.models import User
 from src.keyboards import inline
 from src.texts import ru
 
@@ -42,12 +44,13 @@ async def show_screen(
         await message.answer(text, reply_markup=keyboard, disable_web_page_preview=True)
 
 
-async def show_main_menu(target: Message | CallbackQuery, state: FSMContext) -> None:
+async def show_main_menu(target: Message | CallbackQuery, state: FSMContext, user: User) -> None:
     await state.clear()
+    is_admin = get_settings().is_admin(user.telegram_id)
     if isinstance(target, CallbackQuery):
-        await show_screen(target, ru.MAIN_MENU, inline.main_menu())
+        await show_screen(target, ru.MAIN_MENU, inline.main_menu(is_admin))
     else:
-        await target.answer(ru.MAIN_MENU, reply_markup=inline.main_menu())
+        await target.answer(ru.MAIN_MENU, reply_markup=inline.main_menu(is_admin))
 
 
 async def notify_outdated(callback: CallbackQuery, text: str = ru.OUTDATED_CALLBACK) -> None:

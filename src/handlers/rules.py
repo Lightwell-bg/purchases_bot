@@ -58,8 +58,8 @@ async def read_rules(callback: CallbackQuery, callback_data: RulesCB) -> None:
 
 
 @router.callback_query(RulesCB.filter(F.action == "cancel"))
-async def cancel_rules(callback: CallbackQuery, state: FSMContext) -> None:
-    await show_main_menu(callback, state)
+async def cancel_rules(callback: CallbackQuery, state: FSMContext, user: User) -> None:
+    await show_main_menu(callback, state, user)
     await callback.answer()
 
 
@@ -93,5 +93,5 @@ async def accept_rules(
         await start_join_form(callback, state, session, user, purchase)
         return
 
-    await show_main_menu(callback, state)
+    await show_main_menu(callback, state, user)
     await callback.answer()

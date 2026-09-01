@@ -8,7 +8,16 @@ from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 
 from src.database.models import Participant, Purchase, PurchaseStatus
-from src.keyboards.callbacks import JoinCB, ListCB, ManageCB, MenuCB, PartCB, RulesCB, WizardCB
+from src.keyboards.callbacks import (
+    AdminCB,
+    JoinCB,
+    ListCB,
+    ManageCB,
+    MenuCB,
+    PartCB,
+    RulesCB,
+    WizardCB,
+)
 from src.utils.formatting import truncate
 
 BTN_CANCEL = "❌ Отмена"
@@ -38,12 +47,15 @@ PARTICIPATION_FIELDS: dict[str, str] = {
 CURRENCIES = ("EUR", "USD", "BGN")
 
 
-def main_menu() -> InlineKeyboardMarkup:
+def main_menu(is_admin: bool = False) -> InlineKeyboardMarkup:
     builder = InlineKeyboardBuilder()
     builder.button(text="🛒 Создать закупку", callback_data=MenuCB(action="create"))
     builder.button(text="📋 Активные закупки", callback_data=MenuCB(action="active"))
     builder.button(text="📦 Мои покупки", callback_data=MenuCB(action="my"))
     builder.button(text="📜 Правила", callback_data=MenuCB(action="rules"))
+    if is_admin:
+        builder.button(text="📊 Статистика", callback_data=MenuCB(action="stats"))
+        builder.button(text="🗂 Все закупки", callback_data=MenuCB(action="purchases"))
     builder.adjust(1)
     return builder.as_markup()
 
@@ -418,6 +430,49 @@ def active_purchases(
         nav_row.append(
             InlineKeyboardButton(
                 text="▶️ Далее", callback_data=ListCB(action="page", page=page + 1).pack()
+            )
+        )
+    if nav_row:
+        rows.append(nav_row)
+
+    rows.append(
+        [InlineKeyboardButton(text=BTN_BACK_TO_MENU, callback_data=MenuCB(action="main").pack())]
+    )
+    return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
+# --------------------------------------------------------------------------- #
+# Админ: все закупки
+# --------------------------------------------------------------------------- #
+
+def admin_purchases_list(
+    purchases: Sequence[Purchase],
+    page: int,
+    total_pages: int,
+) -> InlineKeyboardMarkup:
+    """Каждая закупка — кнопка входа в панель управления (не в join-сценарий)."""
+    rows: list[list[InlineKeyboardButton]] = []
+    for purchase in purchases:
+        rows.append(
+            [
+                InlineKeyboardButton(
+                    text=f"🛠 #{purchase.id} {truncate(purchase.title, 24)}",
+                    callback_data=ManageCB(action="panel", purchase_id=purchase.id).pack(),
+                )
+            ]
+        )
+
+    nav_row: list[InlineKeyboardButton] = []
+    if page > 0:
+        nav_row.append(
+            InlineKeyboardButton(
+                text="◀️ Назад", callback_data=AdminCB(action="purchases", page=page - 1).pack()
+            )
+        )
+    if page + 1 < total_pages:
+        nav_row.append(
+            InlineKeyboardButton(
+                text="▶️ Далее", callback_data=AdminCB(action="purchases", page=page + 1).pack()
             )
         )
     if nav_row:

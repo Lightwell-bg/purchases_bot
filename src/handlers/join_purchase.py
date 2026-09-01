@@ -308,8 +308,8 @@ async def join_skip(
 
 
 @router.callback_query(JoinCB.filter(F.action == "cancel"))
-async def join_cancel(callback: CallbackQuery, state: FSMContext) -> None:
-    await show_main_menu(callback, state)
+async def join_cancel(callback: CallbackQuery, state: FSMContext, user: User) -> None:
+    await show_main_menu(callback, state, user)
     await callback.answer(ru.CANCELLED)
 
 
@@ -376,7 +376,7 @@ async def join_confirm(
     quantity = int(data.get("quantity", 0))
     if quantity <= 0:
         await callback.answer(ru.OUTDATED_CALLBACK, show_alert=True)
-        await show_main_menu(callback, state)
+        await show_main_menu(callback, state, user)
         return
 
     try:

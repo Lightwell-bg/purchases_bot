@@ -43,7 +43,7 @@ async def cmd_start(
     logger.info("Start command from tg=%s payload=%r", user.telegram_id, payload)
 
     if not payload:
-        await show_main_menu(message, state)
+        await show_main_menu(message, state, user)
         return
 
     if payload == "create":
@@ -65,8 +65,8 @@ async def cmd_start(
 
 
 @router.message(Command("menu"))
-async def cmd_menu(message: Message, state: FSMContext) -> None:
-    await show_main_menu(message, state)
+async def cmd_menu(message: Message, state: FSMContext, user: User) -> None:
+    await show_main_menu(message, state, user)
 
 
 @router.message(Command("help"))
@@ -81,8 +81,8 @@ async def cmd_cancel(message: Message, state: FSMContext) -> None:
 
 
 @router.callback_query(MenuCB.filter(F.action == "main"))
-async def menu_main(callback: CallbackQuery, state: FSMContext) -> None:
-    await show_main_menu(callback, state)
+async def menu_main(callback: CallbackQuery, state: FSMContext, user: User) -> None:
+    await show_main_menu(callback, state, user)
     await callback.answer()
 
 

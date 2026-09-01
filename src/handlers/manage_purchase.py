@@ -179,6 +179,9 @@ async def clear_field(
     if purchase is None or field not in EDIT_PROMPTS or not EDIT_PROMPTS[field][1]:
         await callback.answer(ru.OUTDATED_CALLBACK, show_alert=True)
         return
+    if purchase.status != PurchaseStatus.OPEN:
+        await callback.answer("Менять можно только открытую закупку.", show_alert=True)
+        return
 
     setattr(purchase, FIELD_TO_COLUMN[field], None)
     await session.flush()
@@ -252,6 +255,10 @@ async def edit_photo(
     if purchase is None:
         await state.clear()
         await message.answer(ru.NOT_YOUR_PURCHASE, reply_markup=inline.main_menu())
+        return
+    if purchase.status != PurchaseStatus.OPEN:
+        await state.clear()
+        await message.answer("Менять можно только открытую закупку.")
         return
 
     photo = message.photo[-1] if message.photo else None

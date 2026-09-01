@@ -545,6 +545,7 @@ def organizer_panel(purchase: Purchase, totals: PurchaseTotals, tz: ZoneInfo) ->
         f"<b>{esc(truncate(purchase.title, LIMITS['title']))}</b>",
         "",
         f"Статус: {STATUS_LABELS[purchase.status]}",
+        f"👤 Организатор: {esc(purchase.organizer.display_name)}",
         f"⏰ Сбор до: {fmt_datetime(purchase.deadline, tz)}",
         "",
         f"👥 Участников: {totals.participants_count}",
@@ -645,28 +646,29 @@ def notify_organizer_new_participant(
 
 ADMIN_ONLY = "Команда доступна только администраторам."
 
+ADMIN_PURCHASES_EMPTY = "🗂 <b>Все закупки</b>\n\nЗакупок пока нет."
+
 
 def admin_stats(
     users: int,
-    open_purchases: int,
-    closed_purchases: int,
-    cancelled_purchases: int,
+    status_counts: Mapping[PurchaseStatus, int],
     active_participants: int,
 ) -> str:
-    return (
-        "📊 <b>Статистика</b>\n\n"
-        f"👤 Пользователей: {users}\n"
-        f"🟢 Открытых закупок: {open_purchases}\n"
-        f"🔒 Закрытых закупок: {closed_purchases}\n"
-        f"❌ Отменённых закупок: {cancelled_purchases}\n"
-        f"👥 Активных заявок: {active_participants}"
-    )
+    lines = ["📊 <b>Статистика</b>", "", f"👤 Пользователей: {users}"]
+    for status in PurchaseStatus:
+        lines.append(f"{STATUS_LABELS[status]}: {status_counts.get(status, 0)}")
+    lines.append(f"👥 Активных заявок: {active_participants}")
+    return "\n".join(lines)
 
 
-def admin_purchases(purchases: Sequence[tuple[Purchase, PurchaseTotals]], tz: ZoneInfo) -> str:
-    if not purchases:
-        return "Закупок пока нет."
-    lines = ["🗂 <b>Последние закупки</b>"]
+def admin_purchases_page(
+    purchases: Sequence[tuple[Purchase, PurchaseTotals]],
+    page: int,
+    total_pages: int,
+    total: int,
+    tz: ZoneInfo,
+) -> str:
+    lines = [f"🗂 <b>Все закупки</b> ({total})"]
     for purchase, totals in purchases:
         lines += [
             "",
@@ -676,6 +678,8 @@ def admin_purchases(purchases: Sequence[tuple[Purchase, PurchaseTotals]], tz: Zo
             f"до {fmt_datetime(purchase.deadline, tz, False)}",
             f"{totals.total_quantity} шт. · {fmt_money(totals.total_value, purchase.currency)}",
         ]
+    if total_pages > 1:
+        lines += ["", f"Страница {page + 1} из {total_pages}"]
     return fit_html("\n".join(lines), MAX_MESSAGE_LENGTH)
 
 
