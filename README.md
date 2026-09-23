@@ -1,243 +1,255 @@
-# Совместные покупки — Telegram-бот
+# Group Buys — Telegram Bot
 
-MVP-бот для организации совместных заказов внутри обычной Telegram-группы.
-Пользователь создаёт объявление о закупке через диалог в личке, бот публикует
-его в группе от своего имени, остальные присоединяются по кнопке, а бот сам
-пересчитывает итоги и обновляет объявление.
+An MVP bot for organizing group purchases inside a regular Telegram group.
+A user creates a purchase listing through a dialog in a private chat, the bot
+publishes it in the group under its own name, others join via a button, and
+the bot automatically recalculates totals and updates the listing.
 
-Бот — только инструмент организации участников. Он **не принимает платежи**,
-не заказывает товар и не даёт юридических заключений по таможне.
+The bot is purely a coordination tool for participants. It **does not accept
+payments**, does not place orders, and does not provide any legal advice on
+customs matters.
+
+> Русская версия: [README_RU.md](README_RU.md). The bot's own interface text
+> is Russian-only (see [Known MVP limitations](#18-known-mvp-limitations)) —
+> this README describes the project in English for contributors.
 
 ---
 
-## Содержание
+## Table of contents
 
-1. [Что делает проект](#1-что-делает-проект)
-2. [Архитектура](#2-архитектура)
-3. [Требования](#3-требования)
-4. [Создание бота через BotFather](#4-создание-бота-через-botfather)
-5. [Как узнать MAIN_GROUP_ID](#5-как-узнать-main_group_id)
-6. [Как добавить бота в группу](#6-как-добавить-бота-в-группу)
-7. [Какие права дать боту](#7-какие-права-дать-боту)
+1. [What the project does](#1-what-the-project-does)
+2. [Architecture](#2-architecture)
+3. [Requirements](#3-requirements)
+4. [Creating a bot via BotFather](#4-creating-a-bot-via-botfather)
+5. [Finding MAIN_GROUP_ID](#5-finding-main_group_id)
+6. [Adding the bot to a group](#6-adding-the-bot-to-a-group)
+7. [Bot permissions](#7-bot-permissions)
 8. [Privacy Mode](#8-privacy-mode)
-9. [Настройка .env](#9-настройка-env)
-10. [Локальный запуск](#10-локальный-запуск)
+9. [.env configuration](#9-env-configuration)
+10. [Local run](#10-local-run)
 11. [Docker](#11-docker)
-12. [Миграции](#12-миграции)
-13. [Логи](#13-логи)
-14. [Обновление](#14-обновление)
-15. [Backup SQLite](#15-backup-sqlite)
-16. [Restore SQLite](#16-restore-sqlite)
-17. [Основные пользовательские сценарии](#17-основные-пользовательские-сценарии)
-18. [Известные ограничения MVP](#18-известные-ограничения-mvp)
+12. [Migrations](#12-migrations)
+13. [Logs](#13-logs)
+14. [Updating](#14-updating)
+15. [SQLite backup](#15-sqlite-backup)
+16. [SQLite restore](#16-sqlite-restore)
+17. [Core user scenarios](#17-core-user-scenarios)
+18. [Known MVP limitations](#18-known-mvp-limitations)
 
 ---
 
-## 1. Что делает проект
+## 1. What the project does
 
-- Пользователь запускает создание закупки из группы — по кнопке в закреплённом
-  сообщении или командой `/buy`.
-- Перед созданием бот показывает правила и требует явного согласия.
-- Пошаговый диалог собирает данные о товаре: название, ссылку, фото, цену,
-  валюту, допустимые варианты, количество организатора, срок сбора, место
-  получения, комментарий.
-- Организатор видит предпросмотр и публикует объявление в группу.
-- Под объявлением — кнопка «Присоединиться», ведущая в личку по deep link.
-- Присоединяющийся тоже принимает правила, указывает количество и вариант.
-- Бот считает участников, штуки, общую стоимость и **ориентировочную** пошлину,
-  обновляет объявление после каждого изменения.
-- Организатор видит список участников, правит закупку и закрывает сбор.
-- Общая стоимость товаров ограничена лимитом (по умолчанию €150).
+- A user starts creating a purchase from the group — via the button in the
+  pinned message or the `/buy` command.
+- Before creation, the bot shows the rules and requires explicit consent.
+- A step-by-step dialog collects the product data: title, link, photo, price,
+  currency, allowed variants, organizer's own quantity, deadline, pickup
+  location, comment.
+- The organizer sees a preview and publishes the listing to the group.
+- The listing has a "Join" button leading to the bot's private chat via a
+  deep link.
+- Anyone joining also accepts the rules, then specifies quantity and variant.
+- The bot tallies participants, units, total cost, and an **estimated**
+  customs duty, updating the listing after every change.
+- The organizer sees the participant list, can edit the purchase, and closes
+  the collection when done.
+- Total product cost is capped by a configurable limit (€150 by default).
 
-**Одна закупка = один товар или одна товарная категория.** Варианты (цвет,
-размер, длина, модель) допускаются, сборная корзина из разных товаров — нет.
+**One purchase = one product or one product category.** Variants (color,
+size, length, model) are allowed; mixing unrelated products in one purchase
+is not.
 
-### Что считает бот
+### What the bot calculates
 
-| Показатель | Формула |
-|------------|---------|
-| Всего штук | `organizer_quantity + Σ quantity активных участников` |
-| Общая стоимость | `unit_price × всего штук` |
-| Ориентировочная пошлина | `CUSTOMS_FLAT_FEE_EUR` (фиксированная) |
-| Ориентировочно на единицу | `CUSTOMS_FLAT_FEE_EUR / всего штук` |
+| Metric | Formula |
+|--------|---------|
+| Total units | `organizer_quantity + Σ quantity of active participants` |
+| Total cost | `unit_price × total units` |
+| Estimated customs duty | `CUSTOMS_FLAT_FEE_EUR` (flat fee) |
+| Estimated duty per unit | `CUSTOMS_FLAT_FEE_EUR / total units` |
 
-Все суммы считаются в `Decimal`. Расчёты информационные: фактическое количество
-отправлений и таможенных позиций зависит от продавца, площадки, перевозчика и
-таможенного оформления.
+All amounts are computed with `Decimal`. These figures are informational
+only: the actual number of shipments and customs line items depends on the
+seller, marketplace, carrier, and customs clearance process.
 
-## 2. Архитектура
+## 2. Architecture
 
 ```
 src/
-├── main.py                  точка входа: миграции, polling, фоновая задача
-├── bot.py                   сборка Bot и Dispatcher
+├── main.py                  entry point: migrations, polling, background task
+├── bot.py                   Bot and Dispatcher assembly
 ├── config.py                .env + settings.ini
 ├── logging_setup.py
 ├── database/
-│   ├── db.py                engine и фабрика сессий
+│   ├── db.py                engine and session factory
 │   ├── models.py            User, Purchase, Participant, RulesAcceptance
-│   ├── types.py             Money (Decimal) и TZDateTime
+│   ├── types.py             Money (Decimal) and TZDateTime
 │   └── repositories/        users, purchases, participants, rules
 ├── handlers/                start, group, rules, create_purchase,
 │                            join_purchase, participation, manage_purchase,
 │                            my_purchases, admin, errors, fallback
-├── keyboards/               inline-клавиатуры и CallbackData-фабрики
-├── middlewares/             сессия БД, регистрация пользователя
+├── keyboards/               inline keyboards and CallbackData factories
+├── middlewares/             DB session, user registration
 ├── services/                calculations, availability, purchase_service,
 │                            rules_service, telegram_service, deadline_checker
-├── states/                  FSM-состояния
-├── texts/                   ru.py и rules.md
+├── states/                  FSM states
+├── texts/                   ru.py and rules.md
 └── utils/                   parsing, formatting
 ```
 
-Подробности — в [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md),
-сценарии — в [docs/USER_FLOW.md](docs/USER_FLOW.md).
+Details — in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md),
+user flows — in [docs/USER_FLOW.md](docs/USER_FLOW.md).
 
-**Стек:** Python 3.12+, aiogram 3, SQLAlchemy 2, SQLite, Alembic,
-pydantic-settings, Docker. Long polling, без webhook.
+**Stack:** Python 3.12+, aiogram 3, SQLAlchemy 2, SQLite, Alembic,
+pydantic-settings, Docker. Long polling, no webhook.
 
-## 3. Требования
+## 3. Requirements
 
-- Python 3.12 или новее (проверено на 3.12 в Docker и 3.14 локально)
-- либо Docker и Docker Compose
-- аккаунт Telegram и права администратора в целевой группе
+- Python 3.12 or newer (tested on 3.12 in Docker and 3.14 locally)
+- or Docker and Docker Compose
+- a Telegram account with admin rights in the target group
 
-## 4. Создание бота через BotFather
+## 4. Creating a bot via BotFather
 
-1. Откройте [@BotFather](https://t.me/BotFather) в Telegram.
-2. `/newbot` → введите отображаемое имя → введите username (должен
-   заканчиваться на `bot`, например `common_buy_bg_bot`).
-3. BotFather пришлёт токен вида `1234567890:AAF...`. Это **секрет** —
-   он идёт только в `.env`, в git не попадает.
-4. Запишите username бота без `@` в `BOT_USERNAME` — он нужен для deep links.
-5. Полезное, но необязательное:
-   - `/setdescription` — описание бота;
-   - `/setcommands` — список команд, например:
+1. Open [@BotFather](https://t.me/BotFather) in Telegram.
+2. `/newbot` → enter a display name → enter a username (must end with `bot`,
+   e.g. `common_buy_bg_bot`).
+3. BotFather sends a token like `1234567890:AAF...`. This is a **secret** —
+   it only goes into `.env`, never into git.
+4. Save the bot's username (without `@`) as `BOT_USERNAME` — needed for deep
+   links.
+5. Optional but useful:
+   - `/setdescription` — bot description;
+   - `/setcommands` — command list, e.g.:
 
      ```
-     start - Главное меню
-     buy - Создать совместную покупку
-     active - Активные закупки
-     my - Мои покупки
-     cancel - Прервать текущий диалог
+     start - Main menu
+     buy - Create a group purchase
+     active - Active purchases
+     my - My purchases
+     cancel - Cancel the current dialog
      ```
 
-   Это необязательно: бот сам регистрирует список команд при каждом старте
-   (`setup_bot_commands` в `src/bot.py`) — отдельно для личных чатов и групп.
+   This is optional: the bot registers its own command list on every start
+   (`setup_bot_commands` in `src/bot.py`) — separately for private chats and
+   groups.
 
-Документация: <https://core.telegram.org/bots/features#botfather>
+Documentation: <https://core.telegram.org/bots/features#botfather>
 
-## 5. Как узнать MAIN_GROUP_ID
+## 5. Finding MAIN_GROUP_ID
 
-Три способа, любой на выбор.
+Three options, pick any.
 
-**Способ 1 — командой бота (проще всего).** Добавьте бота в группу, впишите
-свой Telegram ID в `ADMIN_TELEGRAM_IDS`, запустите бота и отправьте в группе
-`/chatid`. Бот ответит ID чата.
+**Option 1 — via a bot command (easiest).** Add the bot to the group, put
+your own Telegram ID into `ADMIN_TELEGRAM_IDS`, start the bot, and send
+`/chatid` in the group. The bot replies with the chat ID.
 
-**Способ 2 — через getUpdates.** Отправьте в группе любое сообщение боту
-(например `/buy`), затем откройте в браузере:
+**Option 2 — via getUpdates.** Send any message to the bot in the group
+(e.g. `/buy`), then open in a browser:
 
 ```
-https://api.telegram.org/bot<ВАШ_ТОКЕН>/getUpdates
+https://api.telegram.org/bot<YOUR_TOKEN>/getUpdates
 ```
 
-Найдите `"chat":{"id":-1001234567890,...}`.
+Look for `"chat":{"id":-1001234567890,...}`.
 
-**Способ 3 — через сторонний бот** вроде [@getmyid_bot](https://t.me/getmyid_bot):
-добавьте его в группу, он покажет ID.
+**Option 3 — via a third-party bot** such as
+[@getmyid_bot](https://t.me/getmyid_bot): add it to the group, it shows the
+ID.
 
-ID супергруппы отрицательный и начинается с `-100`. Свой личный Telegram ID
-для `ADMIN_TELEGRAM_IDS` можно узнать у [@userinfobot](https://t.me/userinfobot).
+A supergroup ID is negative and starts with `-100`. Your own Telegram ID for
+`ADMIN_TELEGRAM_IDS` can be found via [@userinfobot](https://t.me/userinfobot).
 
-## 6. Как добавить бота в группу
+## 6. Adding the bot to a group
 
-1. Откройте группу → «Участники» → «Добавить участника» → найдите бота
-   по username.
-2. Сделайте бота администратором (см. следующий раздел).
-3. Отправьте в группе `/setup` (от аккаунта из `ADMIN_TELEGRAM_IDS`) — бот
-   опубликует сообщение-приглашение с кнопкой «➕ Создать совместную покупку».
-4. Закрепите это сообщение в группе.
+1. Open the group → "Members" → "Add member" → find the bot by username.
+2. Make the bot an admin (see the next section).
+3. Send `/setup` in the group (from an account listed in
+   `ADMIN_TELEGRAM_IDS`) — the bot publishes an invitation message with a
+   "➕ Create a group purchase" button.
+4. Pin that message in the group.
 
-Дальше новые участники узнают о боте четырьмя способами:
+From then on, new members discover the bot four ways:
 
-- **кнопка «➕ Создать свою закупку» на каждом объявлении** — самая заметная
-  точка входа: видна прямо там, где человек уже смотрит на чужую закупку;
-- **автоматическое приветствие** — когда человек вступает в группу, бот
-  отправляет короткое сообщение с кнопкой создания закупки (оно само
-  удаляется через `group_cleanup_seconds × 10` из `settings.ini`, чтобы не
-  копиться в ленте);
-- **закреплённое сообщение** из `/setup` — висит постоянно;
-- **команда `/help`** в группе — короткая инструкция с той же кнопкой.
+- **the "➕ Create your own purchase" button on every listing** — the most
+  visible entry point: it's right there where the person is already looking
+  at someone else's purchase;
+- **an automatic welcome message** — when someone joins the group, the bot
+  sends a short message with a "create purchase" button (it self-deletes
+  after `group_cleanup_seconds × 10` from `settings.ini`, so it doesn't pile
+  up in the feed);
+- **the pinned message** from `/setup` — always there;
+- **the `/help` command** in the group — a short how-to with the same button.
 
-Команды видны в синей кнопке «Меню» рядом с полем ввода: бот регистрирует
-их при старте отдельно для лички и для групп.
+Commands are visible in the blue "Menu" button next to the input field: the
+bot registers them on every start, separately for private chats and groups.
 
-## 7. Какие права дать боту
+## 7. Bot permissions
 
-Минимально необходимые права администратора группы:
+Minimum required group admin permissions:
 
-| Право | Зачем |
-|-------|-------|
-| Отправка сообщений | публикация объявлений |
-| Редактирование сообщений | обновление объявления при новых участниках |
-| Закрепление сообщений | опционально, если закрепляете через бота |
-| Удаление сообщений | автоуборка команд и ответов бота из ленты, замена объявления с фото |
+| Permission | Why |
+|------------|-----|
+| Send messages | publishing listings |
+| Edit messages | updating the listing as new participants join |
+| Pin messages | optional, if you pin via the bot |
+| Delete messages | auto-cleanup of commands/replies from the feed, replacing the listing when a photo is added |
 
-Права на бан, изменение профиля группы и приглашение по ссылке **не нужны** —
-не выдавайте их.
+Ban rights, group profile editing, and invite-link permissions are **not
+needed** — don't grant them.
 
 ## 8. Privacy Mode
 
-Бот рассчитан на **включённый** Privacy Mode (это состояние по умолчанию).
-При нём бот в группе видит только:
+The bot is designed to run with Privacy Mode **enabled** (the default state).
+With it on, the bot only receives in a group:
 
-- команды, адресованные ему;
-- нажатия на inline-кнопки под своими сообщениями;
-- свои собственные сообщения;
-- переходы по deep links и личные сообщения.
+- commands addressed to it;
+- taps on inline buttons under its own messages;
+- its own messages;
+- deep-link openings and private messages.
 
-Обычную переписку участников бот не получает и не анализирует. Отключать
-Privacy Mode не нужно — вся логика построена под этот режим.
+The bot never receives or analyzes regular member chatter. There's no need
+to disable Privacy Mode — the whole design assumes it stays on.
 
-Проверить: `/mybots` → выбрать бота → *Bot Settings* → *Group Privacy* →
-должно быть `Enabled`.
+Check it: `/mybots` → select the bot → *Bot Settings* → *Group Privacy* →
+should say `Enabled`.
 
-**Нюанс с администраторами.** Telegram доставляет боту вообще все сообщения
-чата, если бот сам состоит администратором группы — настройка Privacy Mode
-на этот случай не действует. Права администратора боту и так нужны для
-редактирования и удаления объявлений (см. раздел 7), так что этот эффект
-неизбежен. Бот от этого не начинает читать и анализировать переписку — в коде
-обрабатывается ровно один частный случай (точное совпадение с текстом кнопки
-постоянной reply-клавиатуры «📋 Активные закупки», см. `src/handlers/group.py`),
-всё остальное по-прежнему игнорируется.
+**A caveat about admin bots.** Telegram delivers *all* chat messages to a
+bot if the bot itself is a group administrator — the Privacy Mode setting
+has no effect in that case. The bot already needs admin rights to edit and
+delete listings (see section 7), so this is unavoidable. This does **not**
+mean the bot starts reading and analyzing chatter: the code handles exactly
+one specific case (an exact text match on the persistent reply-keyboard
+button "📋 Active purchases", see `src/handlers/group.py`) — everything else
+is still ignored.
 
-## 9. Настройка .env
+## 9. .env configuration
 
-Скопируйте шаблон и заполните значения:
+Copy the template and fill in the values:
 
 ```bash
 cp .env.example .env        # Linux/macOS
 copy .env.example .env      # Windows
 ```
 
-| Переменная | Обязательна | Описание |
-|------------|-------------|----------|
-| `BOT_TOKEN` | да | токен от BotFather |
-| `BOT_USERNAME` | да | username бота без `@`, нужен для deep links |
-| `MAIN_GROUP_ID` | да | ID группы для публикации, вида `-1001234567890` |
-| `ADMIN_TELEGRAM_IDS` | нет | Telegram ID администраторов через запятую |
-| `DATABASE_URL` | нет | по умолчанию `sqlite+aiosqlite:///./data/bot.db` |
-| `RUN_MIGRATIONS_ON_START` | нет | `true` — прогонять `alembic upgrade head` при старте |
-| `RULES_VERSION` | нет | версия правил; при изменении все согласия устаревают |
-| `BUSINESS_SETTINGS_FILE` | нет | путь к ini с бизнес-параметрами |
-| `TIMEZONE` | нет | часовой пояс отображения дат, по умолчанию `Europe/Sofia` |
-| `DEADLINE_CHECK_INTERVAL_SECONDS` | нет | период проверки дедлайнов, по умолчанию 300 |
-| `LOG_LEVEL` | нет | `DEBUG` / `INFO` / `WARNING` / `ERROR` |
-| `LOG_FILE` | нет | путь к файлу лога |
+| Variable | Required | Description |
+|----------|----------|--------------|
+| `BOT_TOKEN` | yes | token from BotFather |
+| `BOT_USERNAME` | yes | bot username without `@`, needed for deep links |
+| `MAIN_GROUP_ID` | yes | ID of the group to publish to, e.g. `-1001234567890` |
+| `ADMIN_TELEGRAM_IDS` | no | admin Telegram IDs, comma-separated |
+| `DATABASE_URL` | no | defaults to `sqlite+aiosqlite:///./data/bot.db` |
+| `RUN_MIGRATIONS_ON_START` | no | `true` — run `alembic upgrade head` on startup |
+| `RULES_VERSION` | no | rules version; bumping it invalidates all prior consents |
+| `BUSINESS_SETTINGS_FILE` | no | path to the business-parameters ini file |
+| `TIMEZONE` | no | timezone for displayed dates, defaults to `Europe/Sofia` |
+| `DEADLINE_CHECK_INTERVAL_SECONDS` | no | deadline check interval, defaults to 300 |
+| `LOG_LEVEL` | no | `DEBUG` / `INFO` / `WARNING` / `ERROR` |
+| `LOG_FILE` | no | path to the log file |
 
-**Бизнес-параметры лежат отдельно, в `settings.ini`** — это не секреты, файл
-можно держать в git и править без пересборки образа:
+**Business parameters live separately, in `settings.ini`** — not secrets,
+this file can stay in git and be edited without rebuilding the image:
 
 ```ini
 [business]
@@ -252,16 +264,16 @@ max_deadline_days = 365
 group_cleanup_seconds = 90
 ```
 
-> `.env` не коммитится (он в `.gitignore`) и не приезжает с обновлением кода.
-> Добавили переменную — добавьте её сразу и в `.env.example`, иначе при
-> развёртывании на сервере она молча потеряется. Проверка расхождений
-> (вывод должен быть пустым):
+> `.env` is never committed (it's in `.gitignore`) and doesn't arrive with a
+> code update. If you add a variable, add it to `.env.example` right away —
+> otherwise it silently goes missing on the next server deployment. Check
+> for drift (output should be empty):
 >
 > ```bash
 > diff <(sed -E 's/=.*/=<V>/' .env) <(sed -E 's/=.*/=<V>/' .env.example)
 > ```
 
-## 10. Локальный запуск
+## 10. Local run
 
 ```bash
 python -m venv .venv
@@ -279,19 +291,19 @@ Linux/macOS:
 source .venv/bin/activate
 ```
 
-Дальше:
+Then:
 
 ```bash
 pip install -r requirements.txt
-cp .env.example .env          # и заполнить значения
+cp .env.example .env          # and fill in the values
 alembic upgrade head
 python -m src.main
 ```
 
-Миграции можно не запускать вручную: при `RUN_MIGRATIONS_ON_START=true`
-приложение прогоняет их само при старте.
+You don't have to run migrations manually: with `RUN_MIGRATIONS_ON_START=true`
+the app runs them itself on startup.
 
-Тесты:
+Tests:
 
 ```bash
 pytest
@@ -304,77 +316,78 @@ docker compose build
 docker compose up -d
 ```
 
-Логи:
+Logs:
 
 ```bash
 docker compose logs -f
 ```
 
-Остановка:
+Stop:
 
 ```bash
 docker compose down
 ```
 
-База лежит в `./data`, логи — в `./logs`, оба каталога смонтированы в контейнер,
-поэтому данные переживают пересборку. `settings.ini` тоже смонтирован — правки
-бизнес-параметров применяются после `docker compose restart`, без пересборки.
+The database lives in `./data`, logs in `./logs` — both directories are
+mounted into the container, so data survives rebuilds. `settings.ini` is
+mounted too — business-parameter edits take effect after
+`docker compose restart`, no rebuild needed.
 
-Контейнер перезапускается автоматически (`restart: unless-stopped`).
+The container restarts automatically (`restart: unless-stopped`).
 
-## 12. Миграции
+## 12. Migrations
 
-Создать миграцию после изменения моделей:
+Create a migration after changing the models:
 
 ```bash
-alembic revision --autogenerate -m "описание изменения"
+alembic revision --autogenerate -m "description of the change"
 ```
 
-Применить:
+Apply:
 
 ```bash
 alembic upgrade head
 ```
 
-Откатить на шаг назад:
+Roll back one step:
 
 ```bash
 alembic downgrade -1
 ```
 
-Проверить, что модели и схема совпадают:
+Check that models and schema match:
 
 ```bash
 alembic check
 ```
 
-Текущая ревизия:
+Current revision:
 
 ```bash
 alembic current
 ```
 
-В Docker: `docker compose exec bot alembic upgrade head`.
+In Docker: `docker compose exec bot alembic upgrade head`.
 
-SQLite не умеет `ALTER TABLE` в полном объёме, поэтому в `migrations/env.py`
-включён `render_as_batch=True` — Alembic пересоздаёт таблицы автоматически.
+SQLite doesn't fully support `ALTER TABLE`, so `migrations/env.py` enables
+`render_as_batch=True` — Alembic recreates tables automatically as needed.
 
-## 13. Логи
+## 13. Logs
 
-Пишутся одновременно в stdout (виден в `docker compose logs`) и в файл
-`logs/bot.log` с ротацией (5 МБ, 3 файла).
+Written simultaneously to stdout (visible via `docker compose logs`) and to
+`logs/bot.log` with rotation (5 MB, 3 files).
 
-Логируются: старт и остановка приложения, Telegram ID пользователя, создание и
-публикация закупки, присоединение, изменение, отказ, закрытие, ошибки Telegram
-API и БД. `BOT_TOKEN` и содержимое `.env` не логируются никогда.
+Logged: application start/stop, user Telegram ID, purchase creation and
+publishing, joining, editing, leaving, closing, Telegram API and DB errors.
+`BOT_TOKEN` and the contents of `.env` are never logged.
 
-Уровень задаётся `LOG_LEVEL`. Для отладки:
+Level is set via `LOG_LEVEL`. For debugging:
 
 ```bash
 LOG_LEVEL=DEBUG python -m src.main
 ```
 
-## 14. Обновление
+## 14. Updating
 
 ```bash
 git pull
@@ -383,7 +396,7 @@ docker compose up -d
 docker compose logs -f
 ```
 
-Локально:
+Locally:
 
 ```bash
 git pull
@@ -392,37 +405,37 @@ alembic upgrade head
 python -m src.main
 ```
 
-После обновления сверьте `.env` с `.env.example` — в коде могли появиться новые
-переменные.
+After updating, check `.env` against `.env.example` — new variables may have
+been added in the code.
 
-## 15. Backup SQLite
+## 15. SQLite backup
 
 ```bash
 mkdir -p backups
 cp data/bot.db backups/bot-$(date +%F-%H%M).db
 ```
 
-Корректнее — средствами SQLite, они не боятся параллельной записи:
+More correct — using SQLite's own tooling, which is safe under concurrent
+writes:
 
 ```bash
 sqlite3 data/bot.db ".backup 'backups/bot-$(date +%F-%H%M).db'"
 ```
 
-В Docker:
+In Docker:
 
 ```bash
 docker compose exec bot cp /app/data/bot.db /app/data/bot-backup.db
 mv data/bot-backup.db backups/bot-$(date +%F-%H%M).db
 ```
 
-Каталог `backups/` в `.gitignore`. Для регулярных копий достаточно одной строки
-в cron:
+`backups/` is in `.gitignore`. For regular backups, one cron line is enough:
 
 ```
 0 3 * * * cd /opt/purchases_bot && cp data/bot.db backups/bot-$(date +\%F).db
 ```
 
-## 16. Restore SQLite
+## 16. SQLite restore
 
 ```bash
 docker compose down
@@ -431,73 +444,79 @@ docker compose up -d
 docker compose logs -f
 ```
 
-Локально — то же самое, только вместо `docker compose` останавливается
-и запускается `python -m src.main`. Перед восстановлением сохраните текущий
-файл: `cp data/bot.db data/bot.db.broken`.
+Locally — the same, except instead of `docker compose` you stop and start
+`python -m src.main`. Before restoring, save the current file:
+`cp data/bot.db data/bot.db.broken`.
 
-## 17. Основные пользовательские сценарии
+## 17. Core user scenarios
 
-1. **Создание.** Группа → кнопка или `/buy` → правила → 10 шагов мастера →
-   предпросмотр → публикация в группе.
-2. **Присоединение.** Объявление → «🛒 Присоединиться» → правила → количество,
-   вариант, комментарий → подтверждение. Объявление в группе обновляется.
-3. **Изменение заявки.** «📦 Мои покупки» → своя закупка → «✏️ Изменить».
-   Доступно, пока сбор открыт.
-4. **Отказ.** Там же → «❌ Отказаться» с подтверждением.
-5. **Управление.** Организатор: участники, правка полей, закрытие сбора,
-   отмена закупки.
-6. **Закрытие.** «🔒 Закрыть сбор» → подтверждение → объявление помечается
-   «СБОР ЗАКРЫТ», кнопка присоединения исчезает, участники получают уведомление.
-7. **Автозакрытие.** Просроченные закупки закрываются фоновой задачей.
-8. **Просмотр активных закупок.** «📋 Активные закупки» в личном меню, команда
-   `/active` или та же кнопка на постоянной клавиатуре в группе — список всех
-   открытых закупок с постраничной навигацией и ссылкой «Открыть» на каждую.
-9. **Администрирование.** У пользователей из `ADMIN_TELEGRAM_IDS` в главном
-   меню лички появляются «📊 Статистика» и «🗂 Все закупки». Статистика
-   показывает счётчики по всем статусам закупок и число пользователей.
-   «Все закупки» — постраничный список всех закупок (кроме черновиков) с
-   кнопкой входа в панель управления любой из них, даже если админ не
-   организатор: там доступны редактирование любого поля, закрытие и отмена
-   сбора — то же самое, что видит сам организатор. Команды `/stats` и
-   `/purchases` работают как раньше, независимо от кнопок в меню.
+1. **Creation.** Group → button or `/buy` → rules → 10-step wizard →
+   preview → publish to the group.
+2. **Joining.** Listing → "🛒 Join" → rules → quantity, variant, comment →
+   confirmation. The group listing updates.
+3. **Editing a request.** "📦 My purchases" → your purchase → "✏️ Edit".
+   Available while the collection is still open.
+4. **Leaving.** Same screen → "❌ Leave" with confirmation.
+5. **Management.** Organizer: participants, field edits, closing the
+   collection, cancelling the purchase.
+6. **Closing.** "🔒 Close collection" → confirmation → the listing is marked
+   "COLLECTION CLOSED", the join button disappears, participants are
+   notified.
+7. **Auto-closing.** Expired purchases are closed by a background task.
+8. **Browsing active purchases.** "📋 Active purchases" in the private-chat
+   main menu, the `/active` command, or the same button on the persistent
+   group keyboard — a paginated list of all open purchases with an "Open"
+   link on each.
+9. **Administration.** Users listed in `ADMIN_TELEGRAM_IDS` get two extra
+   buttons in the private-chat main menu: "📊 Statistics" and "🗂 All
+   purchases". Statistics show counts for every purchase status plus the
+   user count. "All purchases" is a paginated list of every purchase (except
+   drafts) with a button into that purchase's management panel — even if
+   the admin isn't the organizer: full field editing, closing, and
+   cancelling are all available there, exactly like the organizer's own
+   view. The `/stats` and `/purchases` commands still work as before,
+   independently of the menu buttons.
 
-Подробные схемы — в [docs/USER_FLOW.md](docs/USER_FLOW.md).
+Detailed flow diagrams — in [docs/USER_FLOW.md](docs/USER_FLOW.md).
 
-## 18. Известные ограничения MVP
+## 18. Known MVP limitations
 
-**Функциональные**
+**Functional**
 
-- Нет платежей, баланса и комиссии — расчёты участники ведут напрямую с
-  организатором вне бота.
-- Одна закупка = один товар. Сборной корзины из разных товаров нет.
-- Пошлина считается как фиксированная сумма на закупку. Реальное количество
-  посылок и таможенных позиций бот не знает и не пытается угадать.
-- Лимит `purchase_limit_eur` задан в евро, но применяется к сумме в валюте
-  закупки без конвертации: у бота нет источника курсов. Для закупок не в EUR
-  это приблизительная граница.
-- Валюту после публикации изменить нельзя — иначе разошлись бы расчёты.
-- Один бот работает с одной группой (`MAIN_GROUP_ID`).
-- Интерфейс только на русском.
-- Статусы `ORDERED`, `SHIPPED`, `RECEIVED`, `COMPLETED` заведены в модели,
-  но в UI не используются.
+- No payments, balances, or fees — participants settle up directly with the
+  organizer outside the bot.
+- One purchase = one product. No mixed-cart support for unrelated products.
+- Customs duty is a flat fee per purchase. The bot doesn't know and doesn't
+  attempt to guess the real number of shipments or customs line items.
+- The `purchase_limit_eur` limit is defined in euros but applied to the
+  purchase's own currency total without conversion — the bot has no
+  exchange-rate source. For non-EUR purchases this is an approximate bound.
+- Currency can't be changed after publishing — otherwise totals would drift
+  out of sync.
+- One bot instance serves one group (`MAIN_GROUP_ID`).
+- **The interface is Russian-only** — all bot-facing text lives in
+  `src/texts/ru.py`; there is no i18n layer.
+- The `ORDERED`, `SHIPPED`, `RECEIVED`, `COMPLETED` statuses exist in the
+  data model but aren't used in the UI yet.
 
-**Технические**
+**Technical**
 
-- FSM хранится в памяти: при перезапуске недописанный черновик теряется.
-  Сохранённые в базу закупки и заявки не страдают.
-- SQLite и single-process — до нескольких тысяч закупок этого достаточно,
-  дальше нужен PostgreSQL.
-- Long polling, без webhook.
-- Фото хранится как Telegram `file_id`; если пользователь удалит исходное
-  сообщение с фото, `file_id` может перестать работать.
-- Массовая рассылка идёт последовательно с паузой 50 мс: на очень больших
-  закупках уведомления придут не мгновенно.
-- Ссылка «Открыть объявление в группе» формируется только для супергрупп
-  (ID начинается с `-100`).
-- В Telegram у ботов нет «приватных» сообщений в группе: любой ответ бота
-  виден всем. Поэтому служебная переписка (команды и ответы на них)
-  автоудаляется через `group_cleanup_seconds` (`settings.ini`). Для этого боту нужно право
-  «Удаление сообщений» — без него сообщения просто останутся в ленте.
-- Ссылка на товар ограничена 2048 символами.
-- Если объявление в группе удалено вручную, бот перестаёт его обновлять и
-  сообщает об этом в панели организатора.
+- FSM state is kept in memory: an unfinished draft is lost on restart.
+  Purchases and requests already saved to the database are unaffected.
+- SQLite, single process — fine up to a few thousand purchases; beyond that,
+  PostgreSQL would be needed.
+- Long polling, no webhook.
+- Photos are stored as Telegram `file_id`s; if the user deletes the original
+  message containing the photo, the `file_id` may stop working.
+- Broadcast notifications are sent sequentially with a 50 ms pause between
+  each — on very large purchases, notifications won't arrive instantly.
+- The "Open listing in the group" link is only generated for supergroups
+  (ID starting with `-100`).
+- Telegram bots have no "private" messages in a group: any reply from the
+  bot is visible to everyone. That's why routine chatter (commands and
+  replies to them) is auto-deleted after `group_cleanup_seconds`
+  (`settings.ini`). This requires the "Delete messages" permission — without
+  it, those messages simply stay in the feed.
+- Product links are capped at 2048 characters.
+- If a group listing is deleted manually, the bot stops updating it and
+  reports this in the organizer panel.
