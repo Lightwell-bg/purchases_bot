@@ -82,10 +82,19 @@ sudo chown $USER:$USER /opt/purchases_bot
 
 ## Шаг 4. Склонировать репозиторий с токеном
 
+Токен подставляется в URL **один, как логин, без пароля и без email** —
+именно так GitHub принимает personal access token для HTTPS-клонирования:
+
 ```bash
-git clone https://<GITHUB_USERNAME>:<GITHUB_TOKEN>@github.com/Lightwell-bg/purchases_bot.git /opt/purchases_bot
+git clone https://<GITHUB_TOKEN>@github.com/Lightwell-bg/purchases_bot.git /opt/purchases_bot
 cd /opt/purchases_bot
 ```
+
+Частая ошибка — подставить туда ещё и email через `:`
+(`https://you@mail.com:<TOKEN>@github.com/...`). Git разберёт `@` внутри
+email как разделитель логина и хоста и упадёт с
+`URL rejected: Port number was not a decimal number` — токену в этой команде
+пара не нужна, он там один.
 
 Токен в URL остаётся в `.git/config` в открытом виде — сразу после клона
 уберите его оттуда, дальнейшие `git pull` и так будут работать по SSH-ключу
@@ -95,6 +104,10 @@ cd /opt/purchases_bot
 ```bash
 git remote set-url origin https://github.com/Lightwell-bg/purchases_bot.git
 ```
+
+Использованный токен уже побывал в истории команд — после переноса зайдите
+в GitHub → Settings → Developer settings → Personal access tokens и
+отзовите/пересоздайте его.
 
 ## Шаг 5. Залить данные через WinSCP
 
